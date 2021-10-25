@@ -1,0 +1,26 @@
+numpy
+absl-py
+certifi
+chumpy
+cycler
+Cython
+flatbuffers
+future
+jax
+jaxlib
+kiwisolver
+matplotlib
+numpy
+opencv-python==4.4.0.46
+opendr
+opt-einsum
+Pillow
+pygame
+pyparsing
+# pyrealsense2
+python-dateutil
+scipy
+six
+torch
+torchvision
+transforms3d
