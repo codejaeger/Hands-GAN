@@ -36,7 +36,7 @@ class NYU(Loader):
         print("loading dataset, containing %d images." % len(self.data))
 
     def __getitem__(self, index):
-        index = 23
+        # index = 23
         img = self.nyu_reader(self.data[index][0])
         jt_xyz = self.data[index][2].copy()
 

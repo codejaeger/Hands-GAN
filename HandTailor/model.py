@@ -206,7 +206,7 @@ class Hand2D(nn.Module):
             l_est_hm.append(est_hm)
             l_enc.append(net)
         assert len(l_est_hm) == self.nstacks
-        print("hand2d", l_est_hm, l_enc, torch.mean(l_est_hm[-1]))
+        # print("hand2d", l_est_hm, l_enc, torch.mean(l_est_hm[-1]))
         return l_est_hm, l_enc
 
 class IKNet(nn.Module):
@@ -290,24 +290,24 @@ class Hand2Dto3D(nn.Module):
         net = enc
 
         for i in range(self.nstacks):
-            print(net.shape)
-            print(f'Hand2dto3d_0_{i}', torch.mean(net), "End")
+            # print(net.shape)
+            # print(f'Hand2dto3d_0_{i}', torch.mean(net), "End")
             net = self.hg3d2b[i](net)
             w = 0
             for p in self.hg3d2b.parameters():
                 w += torch.mean(p)
                 # print("Weights", torch.mean(p))
                 # break
-            print("Weights", w)
-            print(f'Hand2dto3d_1_{i}', torch.mean(net), "End")
+            # print("Weights", w)
+            # print(f'Hand2dto3d_1_{i}', torch.mean(net), "End")
             net = self.res[i](net)
-            print(f'Hand2dto3d_2_{i}', torch.mean(net), "End")
+            # print(f'Hand2dto3d_2_{i}', torch.mean(net), "End")
             hm3d = self.sigmoid(self.hm3d[i](net))
-            print(f'Hand2dto3d_3_{i}', torch.mean(hm3d), "End")
+            # print(f'Hand2dto3d_3_{i}', torch.mean(hm3d), "End")
             net = torch.cat((net,hm3d),1)
-            print(f'Hand2dto3d_4_{i}', torch.mean(net), "End")
+            # print(f'Hand2dto3d_4_{i}', torch.mean(net), "End")
             net = self.fc[i](net)
-            print(f'Hand2dto3d_5_{i}', torch.mean(net), "End")
+            # print(f'Hand2dto3d_5_{i}', torch.mean(net), "End")
             l_est_hm3d.append(hm3d)
             l_enc3d.append(net)
 
@@ -333,14 +333,14 @@ class Hand3D(nn.Module):
         # print("Weights", self.hand2dto3d.layer[0].weight)
         if self.custom:
             hm, enc = x
-            print("Custom", torch.mean(enc[-1]))
+            # print("Custom", torch.mean(enc[-1]))
         else:
             # print("Check 8")
             hm, enc = self.hand2d(x)
-            print("non Custom", torch.mean(enc[-1]))
+            # print("non Custom", torch.mean(enc[-1]))
         # print(len(hm))
         hm3d, enc3d = self.hand2dto3d(enc[-1])
-        print("Check 2", torch.mean(hm3d[-1]), torch.mean(hm3d[-1][:,:21,...]))
+        # print("Check 2", torch.mean(hm3d[-1]), torch.mean(hm3d[-1][:,:21,...]))
         uvd = []
         uvd.append(hm_to_uvd(hm3d[-1]))
         hm.append(hm3d[-1][:,:21,...])
@@ -383,30 +383,30 @@ class HandNet(nn.Module):
         intr = infos
         batch_size = x[0][-1].shape[0] if self.custom else x.shape[0]
         hm, uvd, _, enc3d = self.hand3d(x)
-        print("HMM", torch.mean(hm[2]), "End", torch.mean(enc3d[-1]), "End", torch.mean(uvd[-1]))
+        # print("HMM", torch.mean(hm[2]), "End", torch.mean(enc3d[-1]), "End", torch.mean(uvd[-1]))
         feat = self.decoder(enc3d[-1])
-        print(torch.mean(feat))
+        # print(torch.mean(feat))
         shape_vector = self.shapereg_layers(feat)
-        print(torch.mean(shape_vector))
+        # print(torch.mean(shape_vector))
         bone = self.sigmoid(shape_vector[:,0:1])
         root = self.sigmoid(shape_vector[:,1:2])
         beta = shape_vector[:,2:]
         joint = uvd2xyz(uvd[-1], root, bone, intr=intr, mode='persp')
-        print("Mean", torch.mean(joint))
+        # print("Mean", torch.mean(joint))
         joint_root = joint[:,self.joint_root_idx,:].unsqueeze(1)
         joint_ = joint - joint_root
         bone_pred = torch.zeros((batch_size, 1)).to(infos.device if infos!=None else x.device)
-        print(torch.mean(bone_pred))
+        # print(torch.mean(bone_pred))
         for jid, nextjid in zip(self.ref_bone_link[:-1], self.ref_bone_link[1:]):
             bone_pred = bone_pred + torch.norm(
                 joint_[:, jid, :] - joint_[:, nextjid, :],
                 dim=1, keepdim=True
             )
-        print(torch.mean(bone_pred))
+        # print(torch.mean(bone_pred))
         bone_pred = bone_pred.unsqueeze(1) # (B,1,1)
         bone_vis = bone_pred
         _joint_ = joint_ / bone_pred
-        print("Jnt", torch.mean(_joint_))
+        # print("Jnt", torch.mean(_joint_))
         so3, quat = self.forward_ik(_joint_)
 
         return hm[-1], so3, beta, joint_root, bone_vis
