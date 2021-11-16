@@ -45,7 +45,7 @@ nest-asyncio==1.5.1
 notebook==6.4.3
 numpy==1.21.2
 opencv-python==4.4.0.46
-opendr==0.78
+
 opt-einsum==3.3.0
 packaging==21.0
 pandocfilters==1.4.3

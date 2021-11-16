@@ -395,7 +395,7 @@ class HandNet(nn.Module):
         # print("Mean", torch.mean(joint))
         joint_root = joint[:,self.joint_root_idx,:].unsqueeze(1)
         joint_ = joint - joint_root
-        bone_pred = torch.zeros((batch_size, 1)).to(infos.device if infos!=None else x.device)
+        bone_pred = torch.zeros((batch_size, 1)).to(infos.device if infos!=None else x[0].device)
         # print(torch.mean(bone_pred))
         for jid, nextjid in zip(self.ref_bone_link[:-1], self.ref_bone_link[1:]):
             bone_pred = bone_pred + torch.norm(
@@ -420,10 +420,12 @@ class HandNetInTheWild(nn.Module):
     def __init__(
         self,
         njoints=21,
+        custom=False
     ):
         super(HandNetInTheWild, self).__init__()
         self.njoints = njoints
-        self.hand3d = Hand3D()
+        self.hand3d = Hand3D(custom=custom)
+        self.custom = custom
         self.decoder = ResNet18()
 
         hidden_size=[512, 512, 1024, 1024, 512, 256]
@@ -446,10 +448,13 @@ class HandNetInTheWild(nn.Module):
         self.joint_root_idx = 9
 
     def forward(self, x, infos=None):
-        batch_size = x.shape[0]
+        batch_size = x[0][-1].shape[0] if self.custom else x.shape[0]
         hm, uvd, _, enc3d = self.hand3d(x)
+        # print("HMM", torch.mean(hm[2]), "End", torch.mean(enc3d[-1]), "End", torch.mean(uvd[-1]))
         feat = self.decoder(enc3d[-1])
+        # print(torch.mean(feat))
         shape_vector = self.shapereg_layers(feat)
+        # print(torch.mean(shape_vector))
         bone = self.sigmoid(shape_vector[:,0:1])
         root = self.sigmoid(shape_vector[:,1:2])
         beta = shape_vector[:,2:]
@@ -462,9 +467,9 @@ class HandNetInTheWild(nn.Module):
         joint[:,:,:2] = joint[:,:,:2]/s
         joint_root = joint[:,self.joint_root_idx,:].unsqueeze(1)
         joint_ = joint - joint_root
-        bone_pred = torch.zeros((batch_size, 1)).to(x.device)
+        bone_pred = torch.zeros((batch_size, 1)).to(x[0][-1].device)
         for jid, nextjid in zip(self.ref_bone_link[:-1], self.ref_bone_link[1:]):
-            bone_pred += torch.norm(
+            bone_pred = bone_pred + torch.norm(
                 joint_[:, jid, :] - joint_[:, nextjid, :],
                 dim=1, keepdim=True
             )

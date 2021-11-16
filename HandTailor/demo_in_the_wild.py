@@ -1,10 +1,11 @@
+import os
 import cv2
 import numpy as np
 import pygame
 import torch
 import time
 import torch.backends.cudnn as cudnn
-import pyrealsense2 as rs
+# import pyrealsense2 as rs
 import jax.numpy as npj
 import PIL.Image as Image
 import glob
@@ -13,10 +14,12 @@ from jax.experimental import optimizers
 from torchvision.transforms import functional
 import pickle
 
-from manolayer import ManoLayer
-from model import HandNetInTheWild
-from checkpoints import CheckpointIO
-import utils
+from .manolayer import ManoLayer
+from .model import HandNetInTheWild
+from .checkpoints import CheckpointIO
+from .utils import *
+
+file_dir = os.path.dirname(os.path.abspath(__file__))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 cudnn.benchmark = True
@@ -115,18 +118,48 @@ def mano_de_j(so3, beta):
     j = joint_mano[0]
     return j
 
+def preprocess(img, arg=None):
+    img = np.flip(img, 1)
+    if img is None:
+        raise ValueError('Image is none - transform')
+    
+    if img.shape[0] > img.shape[1]:
+        margin = int((img.shape[0] - img.shape[1]) / 2)
+        img = img[margin:-margin]
+    elif img.shape[0] < img.shape[1]:
+        margin = int((img.shape[1] - img.shape[0]) / 2)
+        img = img[:, margin:-margin]
+    img = cv2.resize(img, (256, 256),cv2.INTER_LINEAR)
+    frame = img.copy()
+
+    cx = cy = fx = fy = 0
+    if arg is not None:
+        cx = arg.cx
+        cy = arg.cy
+        fx = arg.fx
+        fy = arg.fy
+
+    intr = torch.from_numpy(np.array([
+        [fx, 0.0, cx],
+        [0.0, fy, cy],
+        [0.0, 0.0, 1.0],
+    ], dtype=np.float32)).unsqueeze(0).to(device)
+
+    img = functional.to_tensor(img).float()
+    img = functional.normalize(img, [0.5, 0.5, 0.5], [1, 1, 1])
+    img = img.unsqueeze(0).to(device)
+    return frame, img, intr
+
 def live_application():
     model = HandNetInTheWild()
     model = model.to(device)
     checkpoint_io = CheckpointIO('.', model=model)
-    load_dict = checkpoint_io.load('checkpoints/model.pt')
+    load_dict = checkpoint_io.load(os.path.join(file_dir, 'checkpoints/model.pt'))
     model.eval()
 
-    dd = pickle.load(open("MANO_RIGHT.pkl", 'rb'), encoding='latin1')
+    dd = pickle.load(open(os.path.join(file_dir, "MANO_LEFT.pkl"), 'rb'), encoding='latin1')
     face = np.array(dd['f'])
-    renderer = utils.OpendrRenderer(
-                img_size=256)
-    
+    renderer = OpendrRenderer(img_size=256)
     gr = jit(grad(residuals))
     lr = 0.03
     opt_init, opt_update, get_params = optimizers.adam(lr, b1=0.5, b2=0.5)
@@ -134,26 +167,14 @@ def live_application():
     opt_update = jit(opt_update)
     get_params = jit(get_params)
     i = 0
-    img_list = glob.glob("./demo/*")
+    img_list = glob.glob(os.path.join(file_dir, "demo/*"))
+    print(img_list)
     with torch.no_grad():
         for img_path in img_list:
             i = i + 1
-            img = np.array(Image.open(img_path))
-            if img is None:
-                continue
-            
-            if img.shape[0] > img.shape[1]:
-                margin = int((img.shape[0] - img.shape[1]) / 2)
-                img = img[margin:-margin]
-            elif img.shape[0] < img.shape[1]:
-                margin = int((img.shape[1] - img.shape[0]) / 2)
-                img = img[:, margin:-margin]
-            img = cv2.resize(img, (256, 256),cv2.INTER_LINEAR)
-            frame = img.copy()
-
-            img = functional.to_tensor(img).float()
-            img = functional.normalize(img, [0.5, 0.5, 0.5], [1, 1, 1])
-            img = img.unsqueeze(0).to(device)
+            img = np.array(Image.open("data/RHD_published_v2/evaluation/color/00004.png"))
+            # img = np.array(Image.open(img_path))
+            frame, img, intr = preprocess(img)
             
             hm, so3, beta, joint_root, bone = model(img)
             kp2d = hm_to_kp2d(hm.detach().cpu().numpy())*4
@@ -190,8 +211,10 @@ def live_application():
             v = mano_de(so3, beta)
             v = v*s + np.array([t[0],t[1],0])
             frame1 = renderer.render(v.copy(),face,frame)
-            cv2.imwrite("./out/" + str(i) + "_input.png", np.flip(frame,-1))
-            cv2.imwrite("./out/" + str(i) + "_output.png", np.flip(frame1,-1))
+            print(cv2.imwrite(os.path.join(file_dir, "out/", str(i) + "_output.png"), np.flip(frame1,-1)), os.path.join(file_dir, "out/", str(i) + "_output.png"))
+            # return
+            cv2.imwrite(file_dir + "out/" + str(i) + "_input.png", np.flip(frame,-1))
+            cv2.imwrite(file_dir + "out/" + str(i) + "_output.png", np.flip(frame1,-1)) 
 
 if __name__ == '__main__':
     live_application()
